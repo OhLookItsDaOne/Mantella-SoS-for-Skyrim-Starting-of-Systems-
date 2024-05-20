@@ -1,0 +1,117 @@
+import os
+import subprocess
+import sys
+import configparser
+import psutil
+import time
+
+def launch_exe_file(file_path):
+    subprocess.Popen(file_path, shell=True)
+
+def read_config(config_path, section, key):
+    config = configparser.ConfigParser()
+    config.read(config_path)
+    return config.get(section, key)
+
+def terminate_process_tree_by_name(process_name):
+    for proc in psutil.process_iter(['name']):
+        if proc.info['name'].lower() == process_name.lower():
+            terminate_process_tree(proc)
+
+def terminate_process_tree(process):
+    try:
+        for child in process.children(recursive=True):
+            try:
+                child.terminate()
+            except psutil.NoSuchProcess:
+                pass
+        process.terminate()
+        process.wait()  # Ensure the process is terminated
+    except psutil.NoSuchProcess:
+        pass
+
+def check_skyrim_process():
+    skyrimvr_exe = "SkyrimVR.exe"
+    skyrimvr_pid = None
+
+    # Initial delay before starting the monitoring loop
+    time.sleep(10)
+
+    while True:
+        try:
+            if skyrimvr_pid is None:
+                # Look for the SkyrimVR process and get its PID
+                for proc in psutil.process_iter(['name', 'pid']):
+                    if proc.info['name'].lower() == skyrimvr_exe.lower():
+                        skyrimvr_pid = proc.info['pid']
+                        print(f"SkyrimVR process detected with PID {skyrimvr_pid}.")
+                        break
+
+            if skyrimvr_pid is not None:
+                # Check if the SkyrimVR process is still running
+                if not psutil.pid_exists(skyrimvr_pid):
+                    print("SkyrimVR was exited.")
+                    terminate_process_tree_by_name("Mantella.exe")
+                    print("Mantella.exe terminated.")
+                    terminate_process_tree_by_name("SoS.exe")
+                    print("SoS.exe terminated.")
+                    break
+
+        except psutil.AccessDenied:
+            print("Access denied while accessing process information. Skipping process check.")
+            break
+
+        # Sleep for 10 seconds before checking again
+        time.sleep(3)
+
+def process_monitor():
+    try:
+        script_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+        print(f"Script directory: {script_dir}")
+
+        exe_file1 = os.path.join(script_dir, '..', '..', 'mods', 'Mantella Software', 'Mantella.exe')
+        config_path = os.path.join(script_dir, '..', '..', 'mods', 'Mantella Software', 'config.ini')
+
+        try:
+            if not os.path.isfile(config_path):
+                raise FileNotFoundError(f"Config file not found at: {config_path}")
+
+            skyrimvr_dir = read_config(config_path, 'Paths', 'skyrimvr_folder')
+            xvasynth_folder = read_config(config_path, 'Paths', 'xvasynth_folder')
+
+            sksevr_loader_path = os.path.join(skyrimvr_dir, 'sksevr_loader.exe')
+            xvasynth_exe_path = os.path.join(xvasynth_folder, 'xVASynth.exe')
+
+            if os.path.isfile(sksevr_loader_path):
+                os.chdir(os.path.dirname(sksevr_loader_path))
+                launch_exe_file(sksevr_loader_path)
+                print(f"Found and launched sksevr_loader.exe at: {sksevr_loader_path}")
+            else:
+                print(f"sksevr_loader.exe not found in the specified directory: {skyrimvr_dir}")
+
+            if os.path.isfile(xvasynth_exe_path):
+                os.chdir(os.path.dirname(xvasynth_exe_path))
+                launch_exe_file(xvasynth_exe_path)
+                print(f"Found and launched xVASynth.exe at: {xvasynth_exe_path}")
+            else:
+                print(f"xVASynth.exe not found in the specified directory: {xvasynth_folder}")
+
+            if os.path.isfile(exe_file1):
+                os.chdir(os.path.dirname(exe_file1))
+                launch_exe_file(exe_file1)
+                print(f"Found and launched Mantella.exe at: {exe_file1}")
+            else:
+                print(f"Mantella.exe not found in the specified directory: {os.path.dirname(exe_file1)}")
+
+        except (configparser.NoSectionError, configparser.NoOptionError, FileNotFoundError) as e:
+            print(f"Error reading config.ini or file not found: {e}")
+
+        check_skyrim_process()
+
+    except Exception as e:
+        print(f"Error in process monitor: {e}")
+        import traceback
+        traceback.print_exc()
+
+if __name__ == '__main__':
+    process_monitor()
