@@ -34,8 +34,9 @@ def check_skyrim_process():
     skyrimvr_exe = "SkyrimSE.exe"
     skyrimvr_pid = None
 
-    # Initial delay before starting the monitoring loop
+    # Initial delay before starting the monitoring loop. Could technically be removed but doesnt matter that much.
     time.sleep(10)
+    # I'll remove it if I make a new release sometime tho.
 
     while True:
         try:
